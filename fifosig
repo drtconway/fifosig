@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""
+streamify computing a hash digest.
+
+usage:
+    fifosig [options] <input> <output>
+
+options:
+    -h          print this help message
+    -o FILE     file name to write the sh1 digest to [default: -]
+    -s ALG      algorithm to use [default: sha1]
+    -v          produce verbose output to stderr
+"""
+
+import docopt
+import hashlib
+import os
+import os.path
+import sys
+
+def smartOpen(name, mode):
+    if name == '-':
+        if mode.startswith('r'):
+            return sys.stdin
+        else:
+            return sys.stdout
+    return open(name, mode)
+
+def process(srcName, dstName, outName, alg):
+    M = hashlib.new(alg)
+    if os.path.exists(dstName):
+        os.remove(dstName)
+    os.mkfifo(dstName)
+    # Read 1MB at a time.
+    B = 1024*1024
+    with smartOpen(srcName, 'rb') as src, smartOpen(dstName, 'wb') as dst:
+        buf = src.read(B)
+        while len(buf) > 0:
+            M.update(buf)
+            dst.write(buf)
+            buf = src.read(B)
+    with smartOpen(outName, 'w') as out:
+        out.write(M.hexdigest())
+        out.write('\n')
+
+def main(args):
+    opts = docopt.docopt(__doc__, argv=args, help=True, version='fifosig 0.1')
+
+    process(opts['<input>'], opts['<output>'], opts['-o'], opts['-s'])
+
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
